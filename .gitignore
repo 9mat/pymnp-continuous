@@ -1,0 +1,6 @@
+*.csv
+*.docx
+Untitled*
+doc/
+report/
+results/
