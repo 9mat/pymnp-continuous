@@ -1,0 +1,10 @@
+*.csv
+*.docx
+Untitled*
+doc/
+report/
+results/
+ipopt.opt
+.ipynb_checkpoints/
+.~*
+*#
