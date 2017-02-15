@@ -18,6 +18,10 @@ with open(setting_file, 'r') as f:
     solution_path = settings['solution_path']
     bstr_prefix = settings['bstr_prefix']
 
+# Settings
+utilfe = False
+expdfe = False
+
 # home_dir = '/home/dhlong/UbuntuData/Dropbox/PhD Study/research/mnp_demand_gas_ethanol_dhl/continous/'
 # #home_dir = '/hpctmp2/dhlong/continous/'
 # dta_input_path = home_dir + '../individual_data_wide.dta'
@@ -98,7 +102,7 @@ value_labels = ['value_total']
 # Xexpd_labels = ['dv_ctb', 'dv_bh', 'dv_rec', 'dv_female', 'dv_age_25to40y', 'dv_age_morethan65y', 'dv_somesecondary', 'dv_somecollege', 'dv_carpriceadj_p75p100', 'dv_usageveh_p75p100', 'stationvisit_avgcarprice_adj', 'const'] #+ list(station_dummies.columns[1:])
 # Xutil_labels = ['dv_ctb', 'dv_bh', 'dv_rec', 'dv_female', 'dv_age_25to40y', 'dv_age_morethan65y', 'dv_somesecondary', 'dv_somecollege', 'dv_carpriceadj_p75p100', 'dv_usageveh_p75p100', 'stationvisit_avgcarprice_adj', 'const'] #+ list(station_dummies.columns[1:])
 Xexpd_labels = ['ltank', 'dv_female', 'dv_age_25to40y', 'dv_age_morethan65y', 'dv_somesecondary', 'dv_somecollege', 'dv_carpriceadj_p75p100', 'dv_usageveh_p75p100', 'stationvisit_avgcarprice_adj', 'dv_dow_1', 'dv_dow_2', 'dv_dow_3', 'dv_dow_4', 'dv_dow_5', 'dv_dow_6', 'dv_start_0901_1200',  'dv_start_1201_on', 'const'] #+ list(station_dummies.columns[1:])
-Xutil_labels = ['ltank', 'dv_female', 'dv_age_25to40y', 'dv_age_morethan65y', 'dv_somesecondary', 'dv_somecollege', 'dv_carpriceadj_p75p100', 'dv_usageveh_p75p100', 'stationvisit_avgcarprice_adj', 'dv_dow_1', 'dv_dow_2', 'dv_dow_3', 'dv_dow_4', 'dv_dow_5', 'dv_dow_6', 'dv_start_0901_1200',  'dv_start_1201_on'] #+ list(station_dummies.columns[1:])
+Xutil_labels = ['ltank', 'dv_female', 'dv_age_25to40y', 'dv_age_morethan65y', 'dv_somesecondary', 'dv_somecollege', 'dv_carpriceadj_p75p100', 'dv_usageveh_p75p100', 'stationvisit_avgcarprice_adj', 'dv_dow_1', 'dv_dow_2', 'dv_dow_3', 'dv_dow_4', 'dv_dow_5', 'dv_dow_6', 'dv_start_0901_1200',  'dv_start_1201_on', 'const'] #+ list(station_dummies.columns[1:])
 
 # usage
 #Xexpd_labels = ['choice2', 'choice3', 'dv_ctb', 'dv_bh', 'dv_rec', 'dv_female', 'dv_age_25to40y', 'dv_age_morethan65y', 'dv_somesecondary', 'dv_somecollege', 'dv_carpriceadj_p75p100', 'stationvisit_avgcarprice_adj', 'const']
@@ -107,6 +111,9 @@ Xutil_labels = ['ltank', 'dv_female', 'dv_age_25to40y', 'dv_age_morethan65y', 'd
 # car price
 #Xexpd_labels = ['dv_ctb', 'dv_bh', 'dv_rec', 'dv_female', 'dv_age_25to40y', 'dv_age_morethan65y', 'dv_somesecondary', 'dv_somecollege', 'dv_usageveh_p75p100', 'stationvisit_avgcarprice_adj', 'const']
 #Xutil_labels = ['dv_ctb', 'dv_bh', 'dv_rec', 'dv_female', 'dv_age_25to40y', 'dv_age_morethan65y', 'dv_somesecondary', 'dv_somecollege', 'dv_usageveh_p75p100', 'stationvisit_avgcarprice_adj', 'const']
+
+if utilfe and 'const' in Xutil_labels:
+    Xutil_labels.remove('const')
 
 Xlelas_labels = ['const', 'treat1', 'treat2']
 # Xlelas_labels = ['const', 'treat1', 'treat2', 'treat3', 'treat4']
@@ -153,10 +160,6 @@ n_convenience = dvconvenience.sum()
 convenience = dvconvenience.nonzero()
 inconvenience = (~dvconvenience).nonzero()
 dvchoicef = dvchoice.astype(floatX)
-
-# Settings
-utilfe = False
-expdfe = False
 
 ntheta = (nXlelas + nXlsigma + nXlmu + nXexpd + 
     (nchoice-1)*nXutil + 
