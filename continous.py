@@ -302,7 +302,7 @@ eval_g = type_conversion(theano.function([theta], nlogl_g, allow_input_downcast=
 eval_h = type_conversion(theano.function([theta], nlogl_h, allow_input_downcast=True))
 
 
-if os.path.isfile(solution_path):
+if solution_path is not None and os.path.isfile(solution_path):
     theta000 = np.load(solution_path)
 else:
     theta000 = np.zeros(ntheta)
