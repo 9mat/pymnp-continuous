@@ -9,11 +9,19 @@ import pyipopt
 import os
 import sys
 import pickle
+import json
 
-home_dir = '/home/dhlong/UbuntuData/Dropbox/PhD Study/research/mnp_demand_gas_ethanol_dhl/continous/'
-#home_dir = '/hpctmp2/dhlong/continous/'
-dta_input_path = home_dir + '../individual_data_wide.dta'
-solution_path = home_dir + 'solution.npy'
+setting_file = './settings.json'
+with open(setting_file, 'r') as f:
+    settings = json.load(f)
+    dta_input_path = settings['dta_input_path']
+    solution_path = settings['solution_path']
+    bstr_prefix = settings['bstr_prefix']
+
+# home_dir = '/home/dhlong/UbuntuData/Dropbox/PhD Study/research/mnp_demand_gas_ethanol_dhl/continous/'
+# #home_dir = '/hpctmp2/dhlong/continous/'
+# dta_input_path = home_dir + '../individual_data_wide.dta'
+# solution_path = home_dir + 'solution.npy'
 
 with open(dta_input_path, 'rb') as fi:
     df = pd.read_stata(fi)
@@ -116,7 +124,7 @@ df_nchoice = df[['stationid','choice', 'const']].groupby(['stationid','choice'])
 idf_fe = theano.shared((1-np.isnan(df_nchoice.unstack().as_matrix())).astype(floatX), 'idf_fe')
 
 # prepare shared variables to pass to theano
-choice = theano.shared(df.loc[:, 'choice'].as_matrix().astype(intX) - 1, 'choice')
+choice = theano.shared((df.loc[:, 'choice'].as_matrix()-1).astype(intX), 'choice')
 price  = theano.shared(df.loc[:, price_labels].as_matrix().astype(floatX), 'price')
 value  = theano.shared(df.loc[:, value_labels].as_matrix().astype(floatX), 'value', broadcastable=(False, True))
 Xexpd  = theano.shared(df.loc[:, Xexpd_labels].as_matrix().astype(floatX), 'Xexpd')
@@ -147,8 +155,8 @@ inconvenience = (~dvconvenience).nonzero()
 dvchoicef = dvchoice.astype(floatX)
 
 # Settings
-utilfe = True
-expdfe = True
+utilfe = False
+expdfe = False
 
 ntheta = (nXlelas + nXlsigma + nXlmu + nXexpd + 
     (nchoice-1)*nXutil + 
@@ -374,6 +382,7 @@ def print_results(thetahat, print_row=print_row2):
     dtreat_hat = theano.function([theta], dtreat)(thetahat.astype(floatX))
     print(dtreat_hat)
     print(se_dtreat)
+    print(dtreat_hat/se_dtreat)
     
 print_results(thetahat)
 
@@ -393,12 +402,12 @@ def bootstrap_sample_by_station(df, resampled_stationid, nstation=nstation):
     return resampled_df.reset_index()
 
 def set_shared_value(df):
-    choice.set_value(df.loc[:, 'choice'].as_matrix().astype(np.int64) - 1)
+    choice.set_value((df.loc[:, 'choice'].as_matrix()-1).astype(intX))
     price.set_value(df.loc[:, price_labels].as_matrix().astype(floatX))
     value.set_value(df.loc[:, value_labels].as_matrix().astype(floatX))
     Xexpd.set_value(df.loc[:, Xexpd_labels].as_matrix().astype(floatX))
     Xutil.set_value(df.loc[:, Xutil_labels].as_matrix().astype(floatX))
-    stationid.set_value(df.loc[:, 'stationid'].as_matrix().astype(np.int64))
+    stationid.set_value(df.loc[:, 'stationid'].as_matrix().astype(intX))
 
     df_count_choice = df[['stationid','choice', 'const']].groupby(['stationid','choice']).sum()
     idf_fe.set_value((1-np.isnan(df_count_choice.unstack().as_matrix())).astype(floatX))
@@ -410,12 +419,11 @@ def set_shared_value(df):
 
 gammalelashat, gammalsigmahat, gammalmuhat, betaexpdhat, betautilhat, ltpconvehat, alphahat, betaexpdfehat, betautilfehat = getparams(thetahat, expdfe, utilfe)
 
-def bootstrap(df, randskip, nbstr):
+def bootstrap(df, randskip, nbstr, prefix):
     np.random.seed(1234)
     for i in range(randskip):
         resampled_stationid = resample(np.arange(nstation),replace=True,n_samples=nstation)
         
-    bstrres = []
     for i in range(randskip, randskip+nbstr):
         resampled_stationid = resample(np.arange(nstation),replace=True,n_samples=nstation)
         dfbstr = bootstrap_sample_by_station(df,resampled_stationid)        
@@ -439,19 +447,18 @@ def bootstrap(df, randskip, nbstr):
             newthetahat.astype(floatXnp),
             fprime=eval_g,
             fhess=eval_h,)
-        
-        bstrres.append([i, thetahat2, nloglvalue, status, eval_g(thetahat2)])
-        
-    return bstrres
 
+        res = [i, thetahat2, nloglvalue, status, eval_g(thetahat2)]
+        with open(prefix + 'bstr{:0>4}.pkl'.format(i), 'wb') as f:
+            pickle.dump(res, f)
+        
+        print('bootstrap sample {:0>4}, status {}'.format(i, status))
 
 if len(sys.argv) > 2:
     skip = int(sys.argv[1])
     nbstr = int(sys.argv[2])    
-    bstrres = bootstrap(df,skip,nbstr)
 
-    outname = home_dir + 'bstr{:0>4}-{:0>4}.pkl'.format(skip,skip+nbstr)
+    if not os.path.exists(bstr_prefix):
+        os.makedirs(bstr_prefix)
 
-    with open(outname, 'w') as f:
-        pickle.dump(bstrres, f)
-
+    bootstrap(df,skip,nbstr,bstr_prefix)
