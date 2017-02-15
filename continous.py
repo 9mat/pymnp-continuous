@@ -15,7 +15,7 @@ setting_file = './settings.json'
 with open(setting_file, 'r') as f:
     settings = json.load(f)
     dta_input_path = settings['dta_input_path']
-    solution_path = settings['solution_path']
+    solution_path = settings['solution_path'] if 'solution_path' in settings else None
     bstr_prefix = settings['bstr_prefix']
 
 # Settings
@@ -317,7 +317,8 @@ thetahat , _, _, _, _, fval = pyipopt.fmin_unconstrained(
     fprime=type_conversion(eval_g),
     fhess=eval_h,)
 
-#np.save(solution_path, thetahat)
+if solution_path is not None:
+    np.save(solution_path, thetahat)
 
 def print_row1(lbl, hat, se, t): 
     formatstr = '%30s%10.3f%10.3f%10.3f'
