@@ -8,3 +8,5 @@ ipopt.opt
 .ipynb_checkpoints/
 .~*
 *#
+bstr
+specs
