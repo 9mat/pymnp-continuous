@@ -12,15 +12,25 @@ import pickle
 import json
 
 setting_file = './settings.json'
+if len(sys.argv)>3:
+    setting_file = sys.argv[3].strip()
+    
+settings = {}
 with open(setting_file, 'r') as f:
     settings = json.load(f)
-    dta_input_path = settings['dta_input_path']
-    solution_path = settings['solution_path'] if 'solution_path' in settings else None
-    bstr_prefix = settings['bstr_prefix']
 
-# Settings
-utilfe = False
-expdfe = False
+def read_settings(attr, default_value=None):
+    return settings[attr] if attr in settings else default_value
+
+
+dta_input_path = read_settings('dta_input_path')
+solution_path  = read_settings('solution_path')
+bstr_prefix    = read_settings('bstr_prefix', './bstr')
+save_solution  = read_settings('save_solution', True)
+
+# Fixed effects
+utilfe = read_settings('utilfe', False)
+expdfe = read_settings('expdfe', False)
 
 # home_dir = '/home/dhlong/UbuntuData/Dropbox/PhD Study/research/mnp_demand_gas_ethanol_dhl/continous/'
 # #home_dir = '/hpctmp2/dhlong/continous/'
@@ -51,16 +61,6 @@ df = df.loc[df.treattype < 3]
 # df['ntreat1'] = df.groupby(['date', 'stationid']).treat1.transform(sum)
 # df = df[df.ntreat1 > 0]
 
-# re-index station in running order (0 to nstation-1)
-unique_station, station_reverse_id = np.unique(df.stationid.as_matrix(), return_inverse=True)
-nstation = len(unique_station)
-new_stationid = np.arange(nstation)
-df.stationid = new_stationid[station_reverse_id]
-
-# # generate stations dummies
-# station_dummies = pd.get_dummies(df['stationid'], prefix='dv_station')
-# df[station_dummies.columns[1:]] = station_dummies[station_dummies.columns[1:]]
-
 # generate day of week dummies
 dow_dummies = pd.get_dummies(df['date'].dt.dayofweek, prefix='dv_dow')
 df[dow_dummies.columns[1:]] = dow_dummies[dow_dummies.columns[1:]]
@@ -72,6 +72,28 @@ for elem in df['treattype'].unique():
 # choice dummies
 for elem in df['choice'].unique():
     df.loc[:,'choice' + str(elem)] = df['choice'] == elem
+
+# vehicle class dummies
+# 'car_classCompact',
+# 'car_classSubcompact',
+# 'car_classMidsize',
+# 'car_classSmalltruck',
+# 'car_classSUV',
+# 'car_classFullsize',
+# 'car_classMinivan',
+for elem in df['car_class'].unique():
+    df.loc[:,'car_class' + str(elem)] = df['car_class'] == elem
+
+# station brand dummies
+# 'stationbrandShell',
+# 'stationbrandCosan',
+# 'stationbrandEsso',
+# 'stationbrandPetrobras',
+# 'stationbrandIpiranga',
+# 'stationbrandUnbranded',
+# 'stationbrandAle',
+for elem in df['stationbrand'].unique():
+    df.loc[:,'stationbrand' + str(elem)] = df['stationbrand'] == elem
 
 # inputfile = './data_new_volume.csv'
 # df = pd.read_csv(inputfile)
@@ -93,6 +115,21 @@ df.loc[:,'treat2_college'] = df['treat2']*df['dv_somecollege']
 
 df.loc[:,'ltank'] = np.log(df['car_tank'])
 
+df.loc[:,'gfavor'] = (df.pedivpg > 0.7*1.05).astype(int)
+df.loc[:,'efavor'] = (df.pedivpg < 0.7/1.05).astype(int)
+df.loc[:,'gvfavor'] = (df.pedivpg > 0.7*1.1).astype(int)
+df.loc[:,'evfavor'] = (df.pedivpg < 0.7/1.1).astype(int)
+
+df.loc[:,'treat1_gfavor'] = df.treat1*df.gfavor
+df.loc[:,'treat1_efavor'] = df.treat1*df.efavor
+df.loc[:,'treat1_gvfavor'] = df.treat1*df.gvfavor
+df.loc[:,'treat1_evfavor'] = df.treat1*df.evfavor
+
+df.loc[:,'treat2_gfavor'] = df.treat2*df.gfavor
+df.loc[:,'treat2_efavor'] = df.treat2*df.efavor
+df.loc[:,'treat2_gvfavor'] = df.treat2*df.gvfavor
+df.loc[:,'treat2_evfavor'] = df.treat2*df.evfavor
+
 
 price_labels = ['pg_km_adj', 'pe_km_adj', 'pgmidgrade_km_adj', 'pemidgrade_km_adj']
 price_labels = price_labels[:max(df['choice'])]
@@ -104,6 +141,9 @@ value_labels = ['value_total']
 Xexpd_labels = ['ltank', 'dv_female', 'dv_age_25to40y', 'dv_age_morethan65y', 'dv_somesecondary', 'dv_somecollege', 'dv_carpriceadj_p75p100', 'dv_usageveh_p75p100', 'stationvisit_avgcarprice_adj', 'dv_dow_1', 'dv_dow_2', 'dv_dow_3', 'dv_dow_4', 'dv_dow_5', 'dv_dow_6', 'dv_start_0901_1200',  'dv_start_1201_on', 'const'] #+ list(station_dummies.columns[1:])
 Xutil_labels = ['ltank', 'dv_female', 'dv_age_25to40y', 'dv_age_morethan65y', 'dv_somesecondary', 'dv_somecollege', 'dv_carpriceadj_p75p100', 'dv_usageveh_p75p100', 'stationvisit_avgcarprice_adj', 'dv_dow_1', 'dv_dow_2', 'dv_dow_3', 'dv_dow_4', 'dv_dow_5', 'dv_dow_6', 'dv_start_0901_1200',  'dv_start_1201_on', 'const'] #+ list(station_dummies.columns[1:])
 
+Xexpd_labels = read_settings('Xexpd', Xexpd_labels)
+Xutil_labels = read_settings('Xutil', Xutil_labels)
+
 # usage
 #Xexpd_labels = ['choice2', 'choice3', 'dv_ctb', 'dv_bh', 'dv_rec', 'dv_female', 'dv_age_25to40y', 'dv_age_morethan65y', 'dv_somesecondary', 'dv_somecollege', 'dv_carpriceadj_p75p100', 'stationvisit_avgcarprice_adj', 'const']
 #Xutil_labels = ['dv_ctb', 'dv_bh', 'dv_rec', 'dv_female', 'dv_age_25to40y', 'dv_age_morethan65y', 'dv_somesecondary', 'dv_somecollege', 'dv_carpriceadj_p75p100', 'stationvisit_avgcarprice_adj', 'const']
@@ -112,18 +152,49 @@ Xutil_labels = ['ltank', 'dv_female', 'dv_age_25to40y', 'dv_age_morethan65y', 'd
 #Xexpd_labels = ['dv_ctb', 'dv_bh', 'dv_rec', 'dv_female', 'dv_age_25to40y', 'dv_age_morethan65y', 'dv_somesecondary', 'dv_somecollege', 'dv_usageveh_p75p100', 'stationvisit_avgcarprice_adj', 'const']
 #Xutil_labels = ['dv_ctb', 'dv_bh', 'dv_rec', 'dv_female', 'dv_age_25to40y', 'dv_age_morethan65y', 'dv_somesecondary', 'dv_somecollege', 'dv_usageveh_p75p100', 'stationvisit_avgcarprice_adj', 'const']
 
-if utilfe and 'const' in Xutil_labels:
-    Xutil_labels.remove('const')
 
-Xlelas_labels = ['const', 'treat1', 'treat2']
+Xlelas_labels = ['const']
+#Xlelas_labels = read_settings('Xlelas', Xlelas_labels)
+
 # Xlelas_labels = ['const', 'treat1', 'treat2', 'treat3', 'treat4']
 # Xlelas_labels = ['const', 'treat1', 'treat2', 'dv_usageveh_p75p100', 'treat1_topusage', 'treat2_topusage']
 # Xlelas_labels = ['const', 'treat1', 'treat2', 'dv_somecollege', 'treat1_college', 'treat2_college']
 # Xlelas_labels = ['const', 'treat1', 'treat2', 'dv_usageveh_p75p100', 'dv_somecollege', 'treat1_topusage', 'treat2_topusage', 'treat1_college', 'treat2_college']
-Xlsigma_labels = ['const']
-Xlmu_labels = ['const']
 
-floatX = 'float64'
+Xlsigma_labels = ['const', 'treat1', 'treat2']
+Xlmu_labels = ['const', 'treat1', 'treat2']
+
+if 'lpg_res' in Xlelas_labels or 'lpg_absres' in Xlelas_labels or 'lpg_res' in Xexpd_labels or 'lpg_absres' in Xexpd_labels:
+    assert('price_forecast_error_path' in settings)
+    with open(settings['price_forecast_error_path'], 'rb') as fi:
+        df_fc = pd.read_stata(fi).dropna()
+        df_fc['year'] = df_fc['date'].dt.year
+        df_fc['month'] = df_fc['date'].dt.month
+        df_fc['week'] = df_fc['date'].dt.week
+        df['week'] = df['date'].dt.week
+        df = pd.merge(df, df_fc, on=['cityname', 'year', 'month', 'week'], how='inner')
+        df['lpg_absres'] = df['lpg_res'].abs()
+        df['lpe_absres'] = df['lpe_res'].abs()
+        # df['lpratio_absres'] = (df['lpratio_res'].abs() > 0.02).astype(float)
+        df['treat1_lpg_absres'] = df['lpg_absres']*df['treat1']
+        df['treat2_lpg_absres'] = df['lpg_absres']*df['treat2']
+        df['treat1_lpe_absres'] = df['lpe_absres']*df['treat1']
+        df['treat2_lpe_absres'] = df['lpe_absres']*df['treat2']
+
+# re-index station in running order (0 to nstation-1)
+unique_station, station_reverse_id = np.unique(df.stationid.as_matrix(), return_inverse=True)
+nstation = len(unique_station)
+new_stationid = np.arange(nstation)
+df.stationid = new_stationid[station_reverse_id]
+
+# # generate stations dummies
+# station_dummies = pd.get_dummies(df['stationid'], prefix='dv_station')
+# df[station_dummies.columns[1:]] = station_dummies[station_dummies.columns[1:]]
+
+if utilfe and 'const' in Xutil_labels:
+    Xutil_labels.remove('const')
+
+floatX = read_settings('floatX', 'float64')
 intX = 'int32'
 
 # find choice-station that no consumers choose --> unidentified fixed effects
@@ -163,9 +234,9 @@ dvchoicef = dvchoice.astype(floatX)
 
 ntheta = (nXlelas + nXlsigma + nXlmu + nXexpd + 
     (nchoice-1)*nXutil + 
-    (nstation-1 if expdfe else 0) + # expenditure station fixed effects
-    ((nchoice-1)*(nstation) if utilfe else 0) + # utility station fixed effects
-    (nchoice-1) + # alpha_j -- expenditure product fixed effect
+    (nstation-1 if expdfe else 0) + # station fixed effects in expenditure eq
+    ((nchoice-1)*(nstation) if utilfe else 0) + # station fixed effects in utility eq
+    (nchoice-1) + # alpha_j -- product fixed effect in expenditure eq
     1) # probability of fixed payment
 
 def getparams(theta, expdfe=False, utilfe=False):
@@ -215,7 +286,7 @@ def logsumexp2(x,y):
     return m + T.log(T.exp(x-m) + T.exp(y-m))
 
 # theta = T.vector('theta')
-theta = T.vector('theta64', dtype=floatX)
+theta = T.vector('theta', dtype=floatX)
 
 # def build_nlogl(theta):
 gammalelas, gammalsigma, gammalmu, betaexpd, betautil, ltpconve, alphaexpend, betaexpdfe, betautilfe = getparams(theta, expdfe, utilfe)
@@ -242,8 +313,6 @@ elasdrho = elas/rho
 # Model - consumer choice under flexible payment preference
 ###################################################################
 
-lconvenience_expend = np.log(convenience_expend)
-
 alphachoice = alphaexpend[choice].dimshuffle([0,'x'])
 
 eta = T.log(value) + rho*T.log(chosenprice) - T.dot(Xexpd,betaexpd) - alphachoice - (betaexpdfe[stationid,:] if expdfe else 0)
@@ -253,6 +322,7 @@ utilhete = T.concatenate([T.zeros((Xutil.shape[0],1)), T.dot(Xutil, betautil)],a
 utilquant = T.exp(lexpend)/rho
 
 util0 = T.minimum((utilquant + utilhete)/mu, 1e9)
+util0 = (utilquant + utilhete)/mu
 lprobchoice0 = T.sum(util0*dvchoice,axis=1) - logsumexp(util0,1)
 
 lprobchoice = lprobchoice0 + np.log(1-pconve)
@@ -279,15 +349,22 @@ weight = np.array([0.00000026585516844, 0.00008573687043588, 0.00390539058462906
 # Model - consumer choice under fixed-payment preference
 ###################################################################
 
+lconvenience_expend = np.log(convenience_expend)
+
 eta_i = T.exp(lsigma)*abscissa
 lexpend_i = lexpend - eta + eta_i
 utilconve_i = (T.exp((lexpend_i-lconvenience_expend)/elas)/(1-1/elas) - 1)*convenience_expend
 utilb = T.minimum((utilconve_i + utilhete)/mu, 1e9)
+# utilb = (utilconve_i + utilhete)/mu
 lprobchoice_i = T.sum(utilb*dvchoicef,axis=2) - logsumexp(utilb,2)
 ll = lprobchoice_i + np.log(weight)[:,:,0] - np.log(2*np.pi)/2
 ll2 = -logsumexp(ll,0,None) - T.log(pconve)
 
-nlogl_v = ll1[inconvenience].sum() + logsumexp2(ll1, ll2)[convenience].sum()
+llcombined = ll1*dvconvenience + logsumexp2(ll1, ll2)*(1-dvconvenience)
+nlogl_v = llcombined.sum()
+
+# nlogl_v = ll1[inconvenience].sum() #+ ll2[convenience].sum()
+# nlogl_v = ll1.sum()
 
 #### end of model #################################################
 
@@ -317,7 +394,7 @@ thetahat , _, _, _, _, fval = pyipopt.fmin_unconstrained(
     fprime=type_conversion(eval_g),
     fhess=eval_h,)
 
-if solution_path is not None:
+if solution_path is not None and save_solution:
     np.save(solution_path, thetahat)
 
 def print_row1(lbl, hat, se, t): 
@@ -334,8 +411,7 @@ def print_row3(lbl, hat, se, t):
     print('{},="{:.3f}",{}'.format(lbl, float(hat), '*'*star) )
     print(',="[{:.3f}]"'.format(float(se)))
     
-def print_results(thetahat, print_row=print_row2):
-    covhat = np.linalg.pinv(eval_h(thetahat.astype(floatX)))
+def print_results(thetahat, covhat, print_row=print_row2):
     sehat = np.sqrt(np.diagonal(covhat))
     t = thetahat/sehat
 
@@ -370,7 +446,7 @@ def print_results(thetahat, print_row=print_row2):
 
     print(' \n*** Discrete choice equation')
     for j in range(nchoice-1):
-        print('-------- choice', j+1, '------------------------------------------')
+        print('-------- choice' + str(j+1) + '------------------------------------------')
         for i in range(nXutil):
             print_row(Xutil_labels[i], betautilhat[i][j], betautilse[i][j], betautilt[i][j])
     print('-'*60)
@@ -378,18 +454,33 @@ def print_results(thetahat, print_row=print_row2):
     print(' \n*** logit prob convenience')
     print_row('const', bhat, bse, bt) 
     print('-'*60)
-    
-    dtreat = gammalelas[1,0] - gammalelas[2,0]
-    grad_dtreat = T.grad(dtreat, theta)
-    grad_value = theano.function([theta], grad_dtreat)(thetahat.astype(floatX))
-    se_dtreat = np.sqrt(grad_value.dot(covhat).dot(grad_value))
-    dtreat_hat = theano.function([theta], dtreat)(thetahat.astype(floatX))
-    print(dtreat_hat)
-    print(se_dtreat)
-    print(dtreat_hat/se_dtreat)
-    
-print_results(thetahat)
 
+    if 'treat1' in Xlelas_labels and 'treat2' in Xlelas_labels:
+        itreat1 = Xlelas_labels.index('treat1')
+        itreat2 = Xlelas_labels.index('treat2')
+        treatdiff_v = gammalelas[itreat1,0] - gammalelas[itreat2,0]
+        treatdiff_g = T.grad(treatdiff_v, theta)
+        g = theano.function([theta], treatdiff_g)(thetahat.astype(floatX))
+
+        treatdiff_hat = theano.function([theta], treatdiff_v)(thetahat.astype(floatX))
+        treatdiff_se = np.sqrt(g.dot(covhat).dot(g))
+        treatdiff_t = treatdiff_hat/treatdiff_se
+
+        print_row('Difference in treatment in lelas', treatdiff_hat, treatdiff_se, treatdiff_t)
+    
+    if 'treat1' in Xexpd_labels and 'treat2' in Xexpd_labels:
+        itreat1 = Xexpd_labels.index('treat1')
+        itreat2 = Xexpd_labels.index('treat2')
+        treatdiff_v = betaexpd[itreat1,0] - betaexpd[itreat2,0]
+        treatdiff_g = T.grad(treatdiff_v, theta)
+        g = theano.function([theta], treatdiff_g)(thetahat.astype(floatX))
+
+        treatdiff_hat = theano.function([theta], treatdiff_v)(thetahat.astype(floatX))
+        treatdiff_se = np.sqrt(g.dot(covhat).dot(g))
+        treatdiff_t = treatdiff_hat/treatdiff_se
+
+        print_row('Difference in treatment in lexpd', treatdiff_hat, treatdiff_se, treatdiff_t)
+    
 from sklearn.utils import resample
 
 def bootstrap_sample_by_station(df, resampled_stationid, nstation=nstation):
@@ -466,3 +557,32 @@ if len(sys.argv) > 2:
         os.makedirs(bstr_prefix)
 
     bootstrap(df,skip,nbstr,bstr_prefix)
+
+# % Sandwich se
+jab = theano.gradient.jacobian(llcombined, theta)
+eval_j = theano.function([theta], jab)
+jhat = eval_j(thetahat)
+GG = jhat.transpose().dot(jhat)
+
+# % Cluster se
+GGclustered = np.zeros_like(GG)
+stationidnp = df.stationid.as_matrix().astype(int)
+for stid in range(nstation):
+    jsubhat = jhat[stationidnp==stid].sum(axis=0)
+    GGclustered += np.outer(jsubhat, jsubhat)
+
+# % covariance matrix
+H = eval_h(thetahat)
+Hinv = np.linalg.pinv(H)
+covhat = np.matmul(Hinv, np.matmul(GG, Hinv))
+covhatclustered = np.matmul(Hinv, np.matmul(GGclustered, Hinv))
+print_results(thetahat, covhatclustered)
+print_results(thetahat, covhatclustered, print_row3)
+
+
+if 'statistics_path' in settings:
+    statfile = settings['statistics_path']
+    np.savez(statfile, 
+        thetahat=thetahat,
+        covhat=covhat,
+        covhatclustered=covhatclustered)
