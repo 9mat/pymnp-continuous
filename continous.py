@@ -239,6 +239,10 @@ ntheta = (nXlelas + nXlsigma + nXlmu + nXexpd +
     (nchoice-1) + # alpha_j -- product fixed effect in expenditure eq
     1) # probability of fixed payment
 
+ndraws = 50
+
+draws = np.random.normal(size=(ndraws, nobs, 4))
+
 def getparams(theta, expdfe=False, utilfe=False):
     offset = 0
     gammalelas = theta[offset:offset+nXlelas].reshape((nXlelas, 1))
@@ -272,8 +276,10 @@ def getparams(theta, expdfe=False, utilfe=False):
     if utilfe:
         betautilfe = theta[offset:offset+(nchoice-1)*(nstation)].reshape((-1,nchoice-1))
         offset += (nstation-1)*(nstation)
+
+    lsigmap = theta[offset]
     
-    return gammalelas, gammalsigma, gammalmu, betaexpd, betautil, ltpconve, alphaexpend, betaexpdfe, betautilfe
+    return gammalelas, gammalsigma, gammalmu, betaexpd, betautil, ltpconve, alphaexpend, betaexpdfe, betautilfe, lsigmap
 
 def logsumexp(x,axis,w=idf_fe):
     maxx = T.max(x,axis=axis,keepdims=True)
@@ -289,7 +295,7 @@ def logsumexp2(x,y):
 theta = T.vector('theta', dtype=floatX)
 
 # def build_nlogl(theta):
-gammalelas, gammalsigma, gammalmu, betaexpd, betautil, ltpconve, alphaexpend, betaexpdfe, betautilfe = getparams(theta, expdfe, utilfe)
+gammalelas, gammalsigma, gammalmu, betaexpd, betautil, ltpconve, alphaexpend, betaexpdfe, betautilfe, lsigmap = getparams(theta, expdfe, utilfe)
 
 if utilfe:
     betautilfe = T.concatenate([T.zeros((nstation,1)), betautilfe], axis=1) - 1e9*(1-idf_fe)
@@ -308,27 +314,32 @@ elas     = T.exp(T.dot(Xlelas, gammalelas))
 lsigma   = T.dot(Xlsigma,gammalsigma)
 rho      = elas - 1
 elasdrho = elas/rho
+sigmap   = T.exp(lsigmap)
 
 ###################################################################
 # Model - consumer choice under flexible payment preference
 ###################################################################
 
+lrealprice = T.log(price) + sigmap*draws[...,:nchoice]
+lrealchosenprice = T.sum(lrealprice*dvchoice,axis=2,keepdims=True)
+
 alphachoice = alphaexpend[choice].dimshuffle([0,'x'])
 
-eta = T.log(value) + rho*T.log(chosenprice) - T.dot(Xexpd,betaexpd) - alphachoice - (betaexpdfe[stationid,:] if expdfe else 0)
-lexpend = T.log(value) - rho*(T.log(price) - T.log(chosenprice)) + alphaexpend - alphachoice
+eta = T.log(value) + rho*lrealchosenprice - T.dot(Xexpd,betaexpd) - alphachoice - (betaexpdfe[stationid,:] if expdfe else 0)
+lexpend = T.log(value) - rho*(lrealprice-lrealchosenprice) + alphaexpend - alphachoice
 
 utilhete = T.concatenate([T.zeros((Xutil.shape[0],1)), T.dot(Xutil, betautil)],axis=1) + (betautilfe[stationid,:] if utilfe else 0) 
 utilquant = T.exp(lexpend)/rho
 
 util0 = T.minimum((utilquant + utilhete)/mu, 1e9)
 util0 = (utilquant + utilhete)/mu
-lprobchoice0 = T.sum(util0*dvchoice,axis=1) - logsumexp(util0,1)
+lprobchoice0 = T.sum(util0*dvchoice,axis=2) - logsumexp(util0,2)
 
 lprobchoice = lprobchoice0 + np.log(1-pconve)
 lpdfeta = eta*eta/(2*T.exp(2*lsigma)) + lsigma + np.log(2*np.pi)/2
 ll1 = -lprobchoice + op.squeeze(lpdfeta)
 
+# %%
 # Integration to calcualte choice probability
 # Hermite Gaussian quadrature
 # http://keisan.casio.com/exec/system/1329114617
@@ -336,12 +347,12 @@ ll1 = -lprobchoice + op.squeeze(lpdfeta)
 
 abscissa = np.array([-3.88972489786978000, -3.02063702512089000, -2.27950708050106000, -1.59768263515260000, -0.94778839124016300, -0.31424037625435900, 0.31424037625435900, 0.94778839124016300, 
                    1.59768263515260000, 2.27950708050106000, 3.02063702512089000, 3.88972489786978000
-                  ]).reshape(-1,1,1).astype(floatX)
+                  ]).reshape(-1,1,1,1).astype(floatX)
 
 weight = np.array([0.00000026585516844, 0.00008573687043588, 0.00390539058462906, 0.05160798561588390, 
                      0.26049231026416100, 0.57013523626248000, 0.57013523626248000, 0.26049231026416100, 
                      0.05160798561588390, 0.00390539058462906, 0.00008573687043588, 0.00000026585516844
-                     ]).reshape(-1,1,1).astype(floatX)
+                     ]).reshape(-1,1,1,1).astype(floatX)
 
 
 
@@ -356,13 +367,14 @@ lexpend_i = lexpend - eta + eta_i
 utilconve_i = (T.exp((lexpend_i-lconvenience_expend)/elas)/(1-1/elas) - 1)*convenience_expend
 utilb = T.minimum((utilconve_i + utilhete)/mu, 1e9)
 # utilb = (utilconve_i + utilhete)/mu
-lprobchoice_i = T.sum(utilb*dvchoicef,axis=2) - logsumexp(utilb,2)
+lprobchoice_i = T.sum(utilb*dvchoicef,axis=3) - logsumexp(utilb,3)
 ll = lprobchoice_i + np.log(weight)[:,:,0] - np.log(2*np.pi)/2
 ll2 = -logsumexp(ll,0,None) - T.log(pconve)
 
 llcombined = ll1*dvconvenience + logsumexp2(ll1, ll2)*(1-dvconvenience)
-nlogl_v = llcombined.sum()
+nlogl_v = -(logsumexp(-llcombined,0,None) - np.log(nobs)).sum()
 
+# %%
 # nlogl_v = ll1[inconvenience].sum() #+ ll2[convenience].sum()
 # nlogl_v = ll1.sum()
 
@@ -378,7 +390,7 @@ eval_f = type_conversion(theano.function([theta], nlogl_v))
 eval_g = type_conversion(theano.function([theta], nlogl_g, allow_input_downcast=True))
 eval_h = type_conversion(theano.function([theta], nlogl_h, allow_input_downcast=True))
 
-
+# %%
 if solution_path is not None and os.path.isfile(solution_path):
     theta000 = np.load(solution_path)
 else:
