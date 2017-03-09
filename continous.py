@@ -25,6 +25,7 @@ def read_settings(attr, default_value=None):
 
 dta_input_path = read_settings('dta_input_path')
 solution_path  = read_settings('solution_path')
+solution_random_price_path  = read_settings('solution_random_price_path')
 bstr_prefix    = read_settings('bstr_prefix', './bstr')
 save_solution  = read_settings('save_solution', True)
 
@@ -407,8 +408,8 @@ thetahat , _, _, _, _, fval = pyipopt.fmin_unconstrained(
     fprime=type_conversion(eval_g),
     fhess=eval_h,)
 
-if solution_path is not None and save_solution:
-    np.save(solution_path, thetahat)
+if solution_random_price_path is not None and save_solution:
+    np.save(solution_random_price_path, thetahat)
 
 def print_row1(lbl, hat, se, t): 
     formatstr = '%30s%10.3f%10.3f%10.3f'
