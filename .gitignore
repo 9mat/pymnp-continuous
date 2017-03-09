@@ -10,3 +10,6 @@ ipopt.opt
 *#
 bstr
 specs
+*.json
+*.dta
+.idea/

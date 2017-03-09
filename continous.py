@@ -393,6 +393,7 @@ eval_h = type_conversion(theano.function([theta], nlogl_h, allow_input_downcast=
 # %%
 if solution_path is not None and os.path.isfile(solution_path):
     theta000 = np.load(solution_path)
+    theta000 = np.hstack([theta000, -1e2])
 else:
     theta000 = np.zeros(ntheta)
     theta000[0] = 0.1
