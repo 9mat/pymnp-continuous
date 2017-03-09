@@ -373,7 +373,7 @@ ll = lprobchoice_i + np.log(weight)[:,:,0] - np.log(2*np.pi)/2
 ll2 = -logsumexp(ll,0,None) - T.log(pconve)
 
 llcombined = ll1*dvconvenience + logsumexp2(ll1, ll2)*(1-dvconvenience)
-nlogl_v = -(logsumexp(-llcombined,0,None) - np.log(nobs)).sum()
+nlogl_v = -(logsumexp(-llcombined,0,None) - np.log(ndraws)).sum()
 
 # %%
 # nlogl_v = ll1[inconvenience].sum() #+ ll2[convenience].sum()
