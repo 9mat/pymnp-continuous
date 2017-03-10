@@ -238,7 +238,7 @@ ntheta = (nXlelas + nXlsigma + nXlmu + nXexpd +
     (nstation-1 if expdfe else 0) + # station fixed effects in expenditure eq
     ((nchoice-1)*(nstation) if utilfe else 0) + # station fixed effects in utility eq
     (nchoice-1) + # alpha_j -- product fixed effect in expenditure eq
-    1) # probability of fixed payment
+    1 + 1) # probability of fixed payment
 
 ndraws = 50
 
