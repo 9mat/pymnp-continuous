@@ -10,3 +10,5 @@ ipopt.opt
 *#
 bstr
 specs
+*.json
+.idea/

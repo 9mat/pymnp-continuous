@@ -57,9 +57,9 @@ df = df[df.dv_rj==0]
 df = df[df.choice < 4]
 df = df.loc[df.treattype < 3]
 
-# df['treat1'] = df.treattype == 1
-# df['ntreat1'] = df.groupby(['date', 'stationid']).treat1.transform(sum)
-# df = df[df.ntreat1 > 0]
+df['treat1'] = df.treattype == 1
+df['ntreat1'] = df.groupby(['date', 'stationid']).treat1.transform(sum)
+df = df[df.ntreat1 > 0]
 
 # generate day of week dummies
 dow_dummies = pd.get_dummies(df['date'].dt.dayofweek, prefix='dv_dow')
@@ -161,8 +161,10 @@ Xlelas_labels = ['const']
 # Xlelas_labels = ['const', 'treat1', 'treat2', 'dv_somecollege', 'treat1_college', 'treat2_college']
 # Xlelas_labels = ['const', 'treat1', 'treat2', 'dv_usageveh_p75p100', 'dv_somecollege', 'treat1_topusage', 'treat2_topusage', 'treat1_college', 'treat2_college']
 
-Xlsigma_labels = ['const', 'treat1', 'treat2']
-Xlmu_labels = ['const', 'treat1', 'treat2']
+# Xlsigma_labels = ['const', 'treat1', 'treat2']
+# Xlmu_labels = ['const', 'treat1', 'treat2']
+Xlsigma_labels = ['const']
+Xlmu_labels = ['const']
 
 if 'lpg_res' in Xlelas_labels or 'lpg_absres' in Xlelas_labels or 'lpg_res' in Xexpd_labels or 'lpg_absres' in Xexpd_labels:
     assert('price_forecast_error_path' in settings)
