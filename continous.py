@@ -162,8 +162,13 @@ Xlelas_labels = ['const']
 # Xlelas_labels = ['const', 'treat1', 'treat2', 'dv_somecollege', 'treat1_college', 'treat2_college']
 # Xlelas_labels = ['const', 'treat1', 'treat2', 'dv_usageveh_p75p100', 'dv_somecollege', 'treat1_topusage', 'treat2_topusage', 'treat1_college', 'treat2_college']
 
-Xlsigma_labels = ['const', 'treat1', 'treat2']
-Xlmu_labels = ['const', 'treat1', 'treat2']
+# Xlsigma_labels = ['const', 'treat1', 'treat2']
+# Xlmu_labels = ['const', 'treat1', 'treat2']
+
+Xlsigma_labels = ['const']
+Xlmu_labels = ['const']
+
+Xlsigmap_labels = ['const', 'treat1', 'treat2']
 
 if 'lpg_res' in Xlelas_labels or 'lpg_absres' in Xlelas_labels or 'lpg_res' in Xexpd_labels or 'lpg_absres' in Xexpd_labels:
     assert('price_forecast_error_path' in settings)
@@ -213,6 +218,7 @@ stationid  = theano.shared(df.loc[:, 'stationid'].as_matrix().astype(intX), 'sta
 Xlelas = theano.shared(df.loc[:, Xlelas_labels].as_matrix().astype(floatX), 'Xlelas')
 Xlmu   = theano.shared(df.loc[:, Xlmu_labels].as_matrix().astype(floatX), 'Xlmu')
 Xlsigma = theano.shared(df.loc[:, Xlsigma_labels].as_matrix().astype(floatX), 'Xlsigma')
+Xlsigmap = theano.shared(df.loc[:, Xlsigmap_labels].as_matrix().astype(floatX), 'Xlsigmap')
 
 # dimensionality
 nobs = len(df)
@@ -222,6 +228,7 @@ nXutil = len(Xutil_labels)
 
 nXlelas = len(Xlelas_labels)
 nXlsigma = len(Xlsigma_labels)
+nXlsigmap = len(Xlsigmap_labels)
 nXlmu = len(Xlmu_labels)
 
 dvchoice = T.eq(choice.reshape((-1,1)), np.arange(nchoice, dtype=int).reshape((1,-1)))
@@ -238,9 +245,10 @@ ntheta = (nXlelas + nXlsigma + nXlmu + nXexpd +
     (nstation-1 if expdfe else 0) + # station fixed effects in expenditure eq
     ((nchoice-1)*(nstation) if utilfe else 0) + # station fixed effects in utility eq
     (nchoice-1) + # alpha_j -- product fixed effect in expenditure eq
-    1 + 1) # probability of fixed payment
+    1 + # probability of fixed payment
+    nXlsigmap) 
 
-ndraws = 50
+ndraws = 10
 
 draws = np.random.normal(size=(ndraws, nobs, 4))
 
@@ -278,9 +286,9 @@ def getparams(theta, expdfe=False, utilfe=False):
         betautilfe = theta[offset:offset+(nchoice-1)*(nstation)].reshape((-1,nchoice-1))
         offset += (nstation-1)*(nstation)
 
-    lsigmap = theta[offset]
+    gammalsigmap = theta[offset:offset+nXlsigmap].reshape((nXlsigmap, 1))
     
-    return gammalelas, gammalsigma, gammalmu, betaexpd, betautil, ltpconve, alphaexpend, betaexpdfe, betautilfe, lsigmap
+    return gammalelas, gammalsigma, gammalmu, betaexpd, betautil, ltpconve, alphaexpend, betaexpdfe, betautilfe, gammalsigmap
 
 def logsumexp(x,axis,w=idf_fe):
     maxx = T.max(x,axis=axis,keepdims=True)
@@ -296,7 +304,7 @@ def logsumexp2(x,y):
 theta = T.vector('theta', dtype=floatX)
 
 # def build_nlogl(theta):
-gammalelas, gammalsigma, gammalmu, betaexpd, betautil, ltpconve, alphaexpend, betaexpdfe, betautilfe, lsigmap = getparams(theta, expdfe, utilfe)
+gammalelas, gammalsigma, gammalmu, betaexpd, betautil, ltpconve, alphaexpend, betaexpdfe, betautilfe, gammalsigmap = getparams(theta, expdfe, utilfe)
 
 if utilfe:
     betautilfe = T.concatenate([T.zeros((nstation,1)), betautilfe], axis=1) - 1e9*(1-idf_fe)
@@ -315,7 +323,7 @@ elas     = T.exp(T.dot(Xlelas, gammalelas))
 lsigma   = T.dot(Xlsigma,gammalsigma)
 rho      = elas - 1
 elasdrho = elas/rho
-sigmap   = T.exp(lsigmap)
+sigmap   = T.exp(T.dot(Xlsigmap, gammalsigmap))
 
 ###################################################################
 # Model - consumer choice under flexible payment preference
@@ -394,10 +402,11 @@ eval_h = type_conversion(theano.function([theta], nlogl_h, allow_input_downcast=
 # %%
 if solution_path is not None and os.path.isfile(solution_path):
     theta000 = np.load(solution_path)
-    theta000 = np.hstack([theta000, -1e2])
+    theta000 = np.hstack([theta000, -2*np.ones(nXlsigmap)])
 else:
     theta000 = np.zeros(ntheta)
     theta000[0] = 0.1
+    theta000[-nXlsigmap] = -2.0
     theta000 = theta000.astype(floatXnp)
 
 #Minimize negative log-likelihood
