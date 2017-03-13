@@ -251,6 +251,8 @@ ntheta = (nXlelas + nXlsigma + nXlmu + nXexpd +
 ndraws = 10
 
 draws = np.random.normal(size=(ndraws, nobs, 4))
+draws[:,:,2] = draws[:,:,0]
+draws = draws - np.mean(draws,axis=-1,keepdims=True)
 
 def getparams(theta, expdfe=False, utilfe=False):
     offset = 0
@@ -284,7 +286,7 @@ def getparams(theta, expdfe=False, utilfe=False):
     betautilfe = None
     if utilfe:
         betautilfe = theta[offset:offset+(nchoice-1)*(nstation)].reshape((-1,nchoice-1))
-        offset += (nstation-1)*(nstation)
+        offset += (nchoice-1)*(nstation)
 
     gammalsigmap = theta[offset:offset+nXlsigmap].reshape((nXlsigmap, 1))
     
@@ -323,7 +325,7 @@ elas     = T.exp(T.dot(Xlelas, gammalelas))
 lsigma   = T.dot(Xlsigma,gammalsigma)
 rho      = elas - 1
 elasdrho = elas/rho
-sigmap   = T.exp(T.dot(Xlsigmap, gammalsigmap))
+sigmap   = T.dot(Xlsigmap, gammalsigmap)
 
 ###################################################################
 # Model - consumer choice under flexible payment preference
@@ -381,7 +383,8 @@ ll = lprobchoice_i + np.log(weight)[:,:,0] - np.log(2*np.pi)/2
 ll2 = -logsumexp(ll,0,None) - T.log(pconve)
 
 llcombined = ll1*dvconvenience + logsumexp2(ll1, ll2)*(1-dvconvenience)
-nlogl_v = -(logsumexp(-llcombined,0,None) - np.log(ndraws)).sum()
+llcombined_avg = -(logsumexp(-llcombined,0,None) - np.log(ndraws))
+nlogl_v = llcombined_avg.sum()
 
 # %%
 # nlogl_v = ll1[inconvenience].sum() #+ ll2[convenience].sum()
@@ -399,16 +402,17 @@ eval_f = type_conversion(theano.function([theta], nlogl_v))
 eval_g = type_conversion(theano.function([theta], nlogl_g, allow_input_downcast=True))
 eval_h = type_conversion(theano.function([theta], nlogl_h, allow_input_downcast=True))
 
-# %%
+#%
 if solution_path is not None and os.path.isfile(solution_path):
     theta000 = np.load(solution_path)
     theta000 = np.hstack([theta000, -2*np.ones(nXlsigmap)])
 else:
     theta000 = np.zeros(ntheta)
     theta000[0] = 0.1
-    theta000[-nXlsigmap] = -2.0
+    theta000[-nXlsigmap:] = -2.0
     theta000 = theta000.astype(floatXnp)
 
+# %% 
 #Minimize negative log-likelihood
 pyipopt.set_loglevel(1)
 thetahat , _, _, _, _, fval = pyipopt.fmin_unconstrained(
@@ -417,6 +421,7 @@ thetahat , _, _, _, _, fval = pyipopt.fmin_unconstrained(
     fprime=type_conversion(eval_g),
     fhess=eval_h,)
 
+# %%
 if solution_random_price_path is not None and save_solution:
     np.save(solution_random_price_path, thetahat)
 
@@ -438,9 +443,9 @@ def print_results(thetahat, covhat, print_row=print_row2):
     sehat = np.sqrt(np.diagonal(covhat))
     t = thetahat/sehat
 
-    gammalelashat, gammalsigmahat, gammalmuhat, betaexpdhat, betautilhat, bhat, alphahat,_,_ = getparams(thetahat)
-    gammalelasse, gammalsigmase, gammalmuse, betaexpdse, betautilse, bse, alphase, _, _ = getparams(sehat)
-    gammalelast, gammalsigmat, gammalmut, betaexpdt, betautilt, bt, alphat, _, _ = getparams(t)
+    gammalelashat, gammalsigmahat, gammalmuhat, betaexpdhat, betautilhat, bhat, alphahat,_,_,_ = getparams(thetahat)
+    gammalelasse, gammalsigmase, gammalmuse, betaexpdse, betautilse, bse, alphase, _, _, _ = getparams(sehat)
+    gammalelast, gammalsigmat, gammalmut, betaexpdt, betautilt, bt, alphat, _, _, _ = getparams(t)
 
     print('-'*60)
 
@@ -535,7 +540,7 @@ def set_shared_value(df):
     Xlsigma.set_value(df.loc[:, Xlsigma_labels].as_matrix().astype(floatX))
 
 
-gammalelashat, gammalsigmahat, gammalmuhat, betaexpdhat, betautilhat, ltpconvehat, alphahat, betaexpdfehat, betautilfehat = getparams(thetahat, expdfe, utilfe)
+gammalelashat, gammalsigmahat, gammalmuhat, betaexpdhat, betautilhat, ltpconvehat, alphahat, betaexpdfehat, betautilfehat, gammalsigmaphat = getparams(thetahat, expdfe, utilfe)
 
 def bootstrap(df, randskip, nbstr, prefix):
     np.random.seed(1234)
@@ -582,7 +587,7 @@ if len(sys.argv) > 2:
     bootstrap(df,skip,nbstr,bstr_prefix)
 
 # % Sandwich se
-jab = theano.gradient.jacobian(llcombined, theta)
+jab = theano.gradient.jacobian(llcombined_avg, theta)
 eval_j = theano.function([theta], jab)
 jhat = eval_j(thetahat)
 GG = jhat.transpose().dot(jhat)
