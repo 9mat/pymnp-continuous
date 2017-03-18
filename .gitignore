@@ -12,3 +12,4 @@ bstr
 specs
 *.json
 .idea/
+simdata/
