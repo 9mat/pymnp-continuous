@@ -54,12 +54,12 @@ df.loc[choice==2, 'choice']=3
 
 # drop RJ, drop midgrade ethanol and treatment 3 and 4
 df = df[df.dv_rj==0]
-df = df[df.choice < 4]
+df = df[df.choice < 3]
 df = df.loc[df.treattype < 3]
 
-df['treat1'] = df.treattype == 1
-df['ntreat1'] = df.groupby(['date', 'stationid']).treat1.transform(sum)
-df = df[df.ntreat1 > 0]
+# df['treat1'] = df.treattype == 1
+# df['ntreat1'] = df.groupby(['date', 'stationid']).treat1.transform(sum)
+# df = df[df.ntreat1 > 0]
 
 # generate day of week dummies
 dow_dummies = pd.get_dummies(df['date'].dt.dayofweek, prefix='dv_dow')
@@ -154,14 +154,14 @@ Xutil_labels = read_settings('Xutil', Xutil_labels)
 
 
 Xlelas_labels = ['const']
-#Xlelas_labels = read_settings('Xlelas', Xlelas_labels)
+Xlelas_labels = read_settings('Xlelas', Xlelas_labels)
 
 # Xlelas_labels = ['const', 'treat1', 'treat2', 'treat3', 'treat4']
 # Xlelas_labels = ['const', 'treat1', 'treat2', 'dv_usageveh_p75p100', 'treat1_topusage', 'treat2_topusage']
 # Xlelas_labels = ['const', 'treat1', 'treat2', 'dv_somecollege', 'treat1_college', 'treat2_college']
 # Xlelas_labels = ['const', 'treat1', 'treat2', 'dv_usageveh_p75p100', 'dv_somecollege', 'treat1_topusage', 'treat2_topusage', 'treat1_college', 'treat2_college']
 
-# Xlsigma_labels = ['const', 'treat1', 'treat2']
+# Xlsigma_labels = ['const']
 # Xlmu_labels = ['const', 'treat1', 'treat2']
 Xlsigma_labels = ['const']
 Xlmu_labels = ['const']
@@ -362,10 +362,14 @@ lprobchoice_i = T.sum(utilb*dvchoicef,axis=2) - logsumexp(utilb,2)
 ll = lprobchoice_i + np.log(weight)[:,:,0] - np.log(2*np.pi)/2
 ll2 = -logsumexp(ll,0,None) - T.log(pconve)
 
-llcombined = ll1*dvconvenience + logsumexp2(ll1, ll2)*(1-dvconvenience)
+fixed_payment = read_settings('fixed_payment', True)
+# llcombined = ll1*(1-dvconvenience) - logsumexp2(-ll1, -ll2)*dvconvenience
+if fixed_payment:
+    llcombined = ll1*(1-dvconvenience) + ll2*dvconvenience
+else:
+    llcombined = ll1
 nlogl_v = llcombined.sum()
 
-# nlogl_v = ll1[inconvenience].sum() #+ ll2[convenience].sum()
 # nlogl_v = ll1.sum()
 
 #### end of model #################################################
@@ -398,6 +402,11 @@ thetahat , _, _, _, _, fval = pyipopt.fmin_unconstrained(
 
 if solution_path is not None and save_solution:
     np.save(solution_path, thetahat)
+
+early_exit = read_settings('early_exit', False)
+if early_exit:
+    print("exit early!")
+    exit()
 
 def print_row1(lbl, hat, se, t): 
     formatstr = '%30s%10.3f%10.3f%10.3f'
